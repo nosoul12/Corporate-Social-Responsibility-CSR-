@@ -113,7 +113,7 @@ class AppTheme {
       ),
 
       // Cards with enhanced shadows
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 1,
         shadowColor: Colors.black.withOpacity(0.06),
         shape: RoundedRectangleBorder(

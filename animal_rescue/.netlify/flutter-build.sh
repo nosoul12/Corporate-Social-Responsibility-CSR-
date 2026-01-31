@@ -3,21 +3,15 @@ set -e
 
 echo "Installing Flutter..."
 
-FLUTTER_DIR="$HOME/flutter"
+FLUTTER_VERSION="3.16.5"   # change to your local version
 
-if [ ! -d "$FLUTTER_DIR" ]; then
-  git clone --depth 1 https://github.com/flutter/flutter.git -b stable "$FLUTTER_DIR"
-fi
+git clone https://github.com/flutter/flutter.git -b $FLUTTER_VERSION --depth 1
 
-export PATH="$FLUTTER_DIR/bin:$FLUTTER_DIR/bin/cache/dart-sdk/bin:$PATH"
+export PATH="$PWD/flutter/bin:$PATH"
 
-flutter --version
+flutter doctor
 
-echo "Enabling web..."
-flutter config --enable-web
-
-echo "Getting packages..."
+flutter clean
 flutter pub get
 
-echo "Building Flutter Web..."
-flutter build web --release
+flutter build web --release --web-renderer html

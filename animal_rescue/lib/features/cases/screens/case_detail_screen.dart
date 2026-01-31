@@ -119,7 +119,7 @@ class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> {
       appBar: AppBar(
         elevation: 1,
         backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: AppTheme.onPrimary,
         centerTitle: true,
         flexibleSpace: AppTheme.appBarFlexibleSpace(context),
         title: const Text('Case Details'),
@@ -333,8 +333,8 @@ class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> {
                                         final url = Uri.parse(
                                             'https://www.google.com/maps/dir/?api=1&destination=${animalCase.latitude},${animalCase.longitude}');
                                         if (!await launchUrl(url,
-                                            mode:
-                                                LaunchMode.externalApplication)) {
+                                            mode: LaunchMode
+                                                .externalApplication)) {
                                           if (context.mounted) {
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
@@ -348,8 +348,9 @@ class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> {
                                       icon: const Icon(Icons.directions),
                                       label: const Text('Directions'),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            Theme.of(context).colorScheme.primary,
+                                        backgroundColor: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
                                         foregroundColor: Colors.white,
                                       ),
                                     ),

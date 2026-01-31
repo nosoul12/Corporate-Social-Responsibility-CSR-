@@ -33,7 +33,7 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(caseProvider.notifier).loadCases();
       ref.read(adoptionProvider.notifier).loadAdoptions();
@@ -83,7 +83,7 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
     try {
       final response = await ApiService()
           .getNearbyCases(position.latitude, position.longitude);
-      
+
       if (!mounted) return;
 
       final cases = response
@@ -120,7 +120,7 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
       name: currentUser?.name ?? 'NGO Responder',
       email: currentUser?.email ?? '',
     );
-    
+
     // Find index and update locally
     final index = _nearbyCases.indexWhere((x) => x.id == c.id);
     if (index != -1) {
@@ -143,7 +143,9 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
 
     // 2. Real API Update
     try {
-      await ref.read(caseProvider.notifier).updateCaseStatus(c.id, 'In Progress');
+      await ref
+          .read(caseProvider.notifier)
+          .updateCaseStatus(c.id, 'In Progress');
     } catch (e) {
       // Revert if failed
       if (mounted) {
@@ -165,7 +167,7 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
         _nearbyCases[index] = c.copyWith(status: 'Resolved');
       });
     }
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -177,6 +179,58 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
 
     // 2. Real API Update
     await ref.read(caseProvider.notifier).updateCaseStatus(c.id, 'Resolved');
+  }
+
+  Future<void> _handleDelete(AnimalCase c) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Case'),
+        content: Text('Are you sure you want to delete "${c.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Optimistic Update: Remove from local list
+    setState(() {
+      _nearbyCases.removeWhere((x) => x.id == c.id);
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Case deleted!'),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+    }
+
+    // Real API Delete
+    try {
+      await ref.read(caseProvider.notifier).deleteCase(c.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete case: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -193,27 +247,29 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
       // Check ID match
       final isAssignedToMe = c.assignedNgo!.id == userId;
       // Check status
-      final isRelevantStatus = c.status == 'In Progress' || c.status == 'Resolved';
+      final isRelevantStatus =
+          c.status == 'In Progress' || c.status == 'Resolved';
       return isAssignedToMe && isRelevantStatus;
     }).toList();
 
     // Sort by distance if location available
     if (_currentPosition != null) {
       int sortFunc(AnimalCase a, AnimalCase b) {
-          final da = LocationService().calculateDistance(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
-            a.latitude,
-            a.longitude,
-          );
-          final db = LocationService().calculateDistance(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
-            b.latitude,
-            b.longitude,
-          );
-          return da.compareTo(db);
+        final da = LocationService().calculateDistance(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+          a.latitude,
+          a.longitude,
+        );
+        final db = LocationService().calculateDistance(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+          b.latitude,
+          b.longitude,
+        );
+        return da.compareTo(db);
       }
+
       activeCases.sort(sortFunc);
       respondedCases.sort(sortFunc);
     }
@@ -222,6 +278,7 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
+        surfaceTintColor: AppTheme.onPrimary,
         flexibleSpace: AppTheme.appBarFlexibleSpace(context),
         title: const Text('NGO Operations'),
         actions: [
@@ -245,9 +302,7 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
                   builder: (context) => const ProfileImageSelectorScreen(),
                 ),
               );
-              if (result != null &&
-                  result is Map &&
-                  result['prompt'] != null) {
+              if (result != null && result is Map && result['prompt'] != null) {
                 await ref
                     .read(authProvider.notifier)
                     .updateProfileImage(result['prompt']);
@@ -292,14 +347,16 @@ class _NgoDashboardScreenState extends ConsumerState<NgoDashboardScreen>
                         position: _currentPosition,
                         onRefreshLocation: _refreshNearby,
                         onRespond: _handleRespond,
+                        onDelete: _handleDelete,
                       ),
-                      
+
                       // TAB 2: RESPONDED
                       _RespondedReportsTab(
                         cases: respondedCases,
                         position: _currentPosition,
                         onRefreshLocation: _refreshNearby,
                         onResolve: _handleResolve,
+                        onDelete: _handleDelete,
                       ),
                     ],
                   ),
@@ -313,12 +370,14 @@ class _ActiveReportsTab extends StatelessWidget {
   final Position? position;
   final Function(Position) onRefreshLocation;
   final Function(AnimalCase) onRespond;
+  final Function(AnimalCase) onDelete;
 
   const _ActiveReportsTab({
     required this.cases,
     required this.position,
     required this.onRefreshLocation,
     required this.onRespond,
+    required this.onDelete,
   });
 
   @override
@@ -332,7 +391,7 @@ class _ActiveReportsTab extends StatelessWidget {
           ),
         ),
         if (cases.isEmpty)
-           const SliverFillRemaining(
+          const SliverFillRemaining(
             child: Center(
               child: Text(
                 'No active nearby reports.',
@@ -353,14 +412,16 @@ class _ActiveReportsTab extends StatelessWidget {
                         c.longitude,
                       )
                     : null;
-                
+
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   child: _NgoCaseCard(
                     caseItem: c,
                     distanceMeters: distance,
                     onRespond: () => onRespond(c),
-                    onResolve: () {}, 
+                    onResolve: () {},
+                    onDelete: () => onDelete(c),
                     showRespondButton: true,
                     showResolveButton: false,
                   ),
@@ -379,47 +440,52 @@ class _RespondedReportsTab extends StatelessWidget {
   final Position? position;
   final Function(Position) onRefreshLocation;
   final Function(AnimalCase) onResolve;
+  final Function(AnimalCase) onDelete;
 
   const _RespondedReportsTab({
     required this.cases,
     required this.position,
     required this.onRefreshLocation,
     required this.onResolve,
+    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-     if (cases.isEmpty) {
-       return const Center(child: Text('You have no active responses.', style: TextStyle(color: Colors.grey)));
-     }
-     
-     return ListView.builder(
-       padding: const EdgeInsets.all(16),
-       itemCount: cases.length,
-       itemBuilder: (context, index) {
-          final c = cases[index];
-          final distance = position != null
-              ? LocationService().calculateDistance(
-                  position!.latitude,
-                  position!.longitude,
-                  c.latitude,
-                  c.longitude,
-                )
-              : null;
-          
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _NgoCaseCard(
-              caseItem: c,
-              distanceMeters: distance,
-              onRespond: () {}, // Already responded
-              onResolve: () => onResolve(c),
-              showRespondButton: false,
-              showResolveButton: c.status != 'Resolved',
-            ),
-          );
-       },
-     );
+    if (cases.isEmpty) {
+      return const Center(
+          child: Text('You have no active responses.',
+              style: TextStyle(color: Colors.grey)));
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: cases.length,
+      itemBuilder: (context, index) {
+        final c = cases[index];
+        final distance = position != null
+            ? LocationService().calculateDistance(
+                position!.latitude,
+                position!.longitude,
+                c.latitude,
+                c.longitude,
+              )
+            : null;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _NgoCaseCard(
+            caseItem: c,
+            distanceMeters: distance,
+            onRespond: () {}, // Already responded
+            onResolve: () => onResolve(c),
+            onDelete: () => onDelete(c),
+            showRespondButton: false,
+            showResolveButton: c.status != 'Resolved',
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -439,7 +505,7 @@ class _LocationStatusCard extends StatelessWidget {
       child: Card(
         child: InkWell(
           onTap: () async {
-             final result = await Navigator.push<Map<String, double>>(
+            final result = await Navigator.push<Map<String, double>>(
               context,
               MaterialPageRoute(
                 builder: (context) => LocationPickerScreen(
@@ -450,21 +516,21 @@ class _LocationStatusCard extends StatelessWidget {
             );
 
             if (result != null && context.mounted) {
-               final newPos = Position(
-                 longitude: result['lng']!,
-                 latitude: result['lat']!,
-                 timestamp: DateTime.now(),
-                 accuracy: 0,
-                 altitude: 0,
-                 altitudeAccuracy: 0,
-                 heading: 0,
-                 headingAccuracy: 0,
-                 speed: 0,
-                 speedAccuracy: 0,
-               );
-               onLocationUpdated(newPos);
-               
-               ScaffoldMessenger.of(context).showSnackBar(
+              final newPos = Position(
+                longitude: result['lng']!,
+                latitude: result['lat']!,
+                timestamp: DateTime.now(),
+                accuracy: 0,
+                altitude: 0,
+                altitudeAccuracy: 0,
+                heading: 0,
+                headingAccuracy: 0,
+                speed: 0,
+                speedAccuracy: 0,
+              );
+              onLocationUpdated(newPos);
+
+              ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Responder location updated! Refreshing...'),
                   backgroundColor: AppTheme.success,
@@ -480,7 +546,8 @@ class _LocationStatusCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    color:
+                        Theme.of(context).colorScheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -495,7 +562,10 @@ class _LocationStatusCard extends StatelessWidget {
                     children: [
                       Text(
                         'Responder Location',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -520,6 +590,7 @@ class _NgoCaseCard extends StatelessWidget {
   final double? distanceMeters;
   final VoidCallback onRespond;
   final VoidCallback onResolve;
+  final VoidCallback? onDelete;
   final bool showRespondButton;
   final bool showResolveButton;
 
@@ -528,20 +599,21 @@ class _NgoCaseCard extends StatelessWidget {
     required this.distanceMeters,
     required this.onRespond,
     required this.onResolve,
+    this.onDelete,
     this.showRespondButton = false,
     this.showResolveButton = false,
   });
 
   Color _severityColor(String? severity) {
-      if (severity == 'Critical') return Colors.red;
-      if (severity == 'Urgent') return Colors.orange;
-      return Colors.blue; 
+    if (severity == 'Critical') return Colors.red;
+    if (severity == 'Urgent') return Colors.orange;
+    return Colors.blue;
   }
-  
+
   Color _statusColor(String status) {
-     if (status == 'Resolved') return Colors.green;
-     if (status == 'In Progress') return Colors.amber;
-     return Colors.grey;
+    if (status == 'Resolved') return Colors.green;
+    if (status == 'In Progress') return Colors.amber;
+    return Colors.grey;
   }
 
   @override
@@ -553,7 +625,7 @@ class _NgoCaseCard extends StatelessWidget {
         : distanceMeters! >= 1000
             ? '${(distanceMeters! / 1000).toStringAsFixed(1)} km'
             : '${distanceMeters!.toStringAsFixed(0)} m';
-            
+
     final locationFuture = LocationService().getReadableLocation(
       caseItem.latitude,
       caseItem.longitude,
@@ -575,7 +647,7 @@ class _NgoCaseCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                   Container(
+                  Container(
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
@@ -591,25 +663,26 @@ class _NgoCaseCard extends StatelessWidget {
                       children: [
                         Text(
                           caseItem.title,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         FutureBuilder<String>(
-                        future: locationFuture,
-                        builder: (context, snapshot) {
-                          final label = snapshot.data ?? 'Locating…';
-                          return Text(
-                            '$distanceText • $label',
-                            style: Theme.of(context).textTheme.bodySmall,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          );
-                        },
-                      ),
+                          future: locationFuture,
+                          builder: (context, snapshot) {
+                            final label = snapshot.data ?? 'Locating…';
+                            return Text(
+                              '$distanceText • $label',
+                              style: Theme.of(context).textTheme.bodySmall,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -619,38 +692,40 @@ class _NgoCaseCard extends StatelessWidget {
               Wrap(
                 spacing: 8,
                 children: [
-                   Container(
-                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                     decoration: BoxDecoration(
-                       color: severityColor.withOpacity(0.1),
-                       borderRadius: BorderRadius.circular(8),
-                       border: Border.all(color: severityColor.withOpacity(0.3)),
-                     ),
-                     child: Text(
-                       severityLabel,
-                       style: TextStyle(
-                         color: severityColor,
-                         fontSize: 12,
-                         fontWeight: FontWeight.w600,
-                       ),
-                     ),
-                   ),
-                   if (caseItem.status != 'Reported')
-                      Container(
-                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                     decoration: BoxDecoration(
-                       color: _statusColor(caseItem.status).withOpacity(0.1),
-                       borderRadius: BorderRadius.circular(8),
-                     ),
-                     child: Text(
-                       caseItem.status,
-                       style: TextStyle(
-                         color: _statusColor(caseItem.status),
-                         fontSize: 12,
-                         fontWeight: FontWeight.w600,
-                       ),
-                     ),
-                   ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: severityColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: severityColor.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      severityLabel,
+                      style: TextStyle(
+                        color: severityColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (caseItem.status != 'Reported')
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _statusColor(caseItem.status).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        caseItem.status,
+                        style: TextStyle(
+                          color: _statusColor(caseItem.status),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                 ],
               ),
               if (showRespondButton || showResolveButton) ...[
@@ -668,17 +743,26 @@ class _NgoCaseCard extends StatelessWidget {
                           child: const Text('Respond To Case'),
                         ),
                       ),
-                    if (showResolveButton)
+                    if (showResolveButton) ...[
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: onResolve,
-                           style: ElevatedButton.styleFrom(
+                          style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.success,
                             foregroundColor: Colors.white,
                           ),
                           icon: const Icon(Icons.check),
                           label: const Text('Mark Resolved'),
                         ),
+                      ),
+                      if (onDelete != null) const SizedBox(width: 8),
+                    ],
+                    if (onDelete != null)
+                      IconButton(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete),
+                        color: Colors.red,
+                        tooltip: 'Delete Case',
                       ),
                   ],
                 ),

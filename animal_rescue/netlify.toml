@@ -1,0 +1,4 @@
+[build]
+  base = "animal_rescue"
+  publish = "build/web"
+  command = "bash .netlify/flutter-build.sh"

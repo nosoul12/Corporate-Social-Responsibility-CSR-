@@ -187,7 +187,7 @@ class FeedTab extends ConsumerWidget {
           floating: true,
           elevation: 1,
           backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
+          surfaceTintColor: AppTheme.onPrimary,
           centerTitle: true,
           flexibleSpace: AppTheme.appBarFlexibleSpace(context),
           title: Row(
@@ -562,7 +562,7 @@ class AdoptionTab extends ConsumerWidget {
           floating: true,
           elevation: 1,
           backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
+          surfaceTintColor: AppTheme.onPrimary,
           centerTitle: true,
           flexibleSpace: AppTheme.appBarFlexibleSpace(context),
           title: Text(
@@ -776,7 +776,7 @@ class ProfileTab extends ConsumerWidget {
             children: [
               Stack(
                 children: [
-                   GestureDetector(
+                  GestureDetector(
                     onTap: () => _updateProfilePicture(context, ref),
                     child: CircleAvatar(
                       radius: 40,
@@ -784,9 +784,8 @@ class ProfileTab extends ConsumerWidget {
                           .colorScheme
                           .primary
                           .withOpacity(0.15),
-                      backgroundImage: localImage != null
-                          ? AssetImage(localImage)
-                          : null,
+                      backgroundImage:
+                          localImage != null ? AssetImage(localImage) : null,
                       child: localImage == null
                           ? Text(
                               displayName.isNotEmpty
@@ -894,10 +893,7 @@ class ProfileTab extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         'No saved posts yet. Tap the bookmark icon on a post to save it here.',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
@@ -1002,7 +998,9 @@ class ProfileTab extends ConsumerWidget {
     );
 
     if (result != null && result is Map && result['prompt'] != null) {
-      await ref.read(authProvider.notifier).updateProfileImage(result['prompt']);
+      await ref
+          .read(authProvider.notifier)
+          .updateProfileImage(result['prompt']);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile picture updated!')),

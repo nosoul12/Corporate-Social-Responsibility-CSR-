@@ -66,7 +66,7 @@ class _ReportCaseScreenState extends ConsumerState<ReportCaseScreen> {
       appBar: AppBar(
         elevation: 1,
         backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: AppTheme.onPrimary,
         centerTitle: true,
         flexibleSpace: AppTheme.appBarFlexibleSpace(context),
         title: const Text('Report Animal Case'),
